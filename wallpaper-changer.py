@@ -89,7 +89,7 @@ class MainWindow(QtWidgets.QMainWindow):
         QtGui.QGuiApplication.quit()
 
     def browse_folder(self):
-        new_folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Select folders with pictures", self.folder_field.text())
+        new_folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Select folder with pictures", self.folder_field.text())
 
         if new_folder:
             self.folder_field.setText(new_folder)
