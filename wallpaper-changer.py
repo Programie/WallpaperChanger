@@ -1,17 +1,74 @@
 #! /usr/bin/env python3
+import imghdr
 import os
 import random
 import subprocess
 import sys
+from typing import Optional
 
 from PyQt5 import QtWidgets, QtGui, QtCore
+
+
+class Wallpaper:
+    def __init__(self, file_path):
+        self.file_path = file_path
+
+    def is_valid(self) -> bool:
+        return imghdr.what(self.file_path) is not None
+
+
+class WallpaperList(list):
+    def __init__(self):
+        super().__init__()
+
+        self.current_index = 0
+
+    def add_from_path(self, path: str) -> None:
+        for current_path, folders, files in os.walk(path):
+            for file in files:
+                self.append(Wallpaper(os.path.join(current_path, file)))
+
+        random.shuffle(self)
+
+    def previous(self) -> bool:
+        for try_no in range(10):
+            if self.current_index <= 0:
+                self.current_index = len(self) - 1
+            else:
+                self.current_index -= 1
+
+            if self.get_current().is_valid():
+                return True
+
+        return False
+
+    def next(self) -> bool:
+        for try_no in range(10):
+            if self.current_index >= len(self) - 1:
+                self.current_index = 0
+            else:
+                self.current_index += 1
+
+            if self.get_current().is_valid():
+                return True
+
+        return False
+
+    def get_current(self) -> Optional[Wallpaper]:
+        if not len(self):
+            return None
+
+        if self.current_index > len(self) - 1:
+            self.current_index = 0
+
+        return self[self.current_index]
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.wallpapers = []
+        self.wallpapers = WallpaperList()
         self.current_wallpaper_index = 0
 
         self.timer = QtCore.QTimer(self)
@@ -94,22 +151,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if new_folder:
             self.folder_field.setText(new_folder)
 
-    def get_current_wallpaper(self):
-        if not len(self.wallpapers):
-            return None
-
-        if self.current_wallpaper_index > len(self.wallpapers) - 1:
-            self.current_wallpaper_index = 0
-
-        return self.wallpapers[self.current_wallpaper_index]
-
     def open_wallpaper(self):
-        wallpaper = self.get_current_wallpaper()
+        wallpaper = self.wallpapers.get_current()
 
         if wallpaper is None:
             return
 
-        subprocess.call(["xdg-open", wallpaper])
+        subprocess.call(["xdg-open", wallpaper.file_path])
 
     def update_pause_action(self):
         if self.timer.isActive():
@@ -128,50 +176,41 @@ class MainWindow(QtWidgets.QMainWindow):
         self.update_pause_action()
 
     def previous_wallpaper(self):
-        if self.current_wallpaper_index <= 0:
-            self.current_wallpaper_index = len(self.wallpapers) - 1
-        else:
-            self.current_wallpaper_index -= 1
-
-        self.update_wallpaper()
+        if self.wallpapers.previous():
+            self.update_wallpaper()
 
     def next_wallpaper(self):
-        if self.current_wallpaper_index >= len(self.wallpapers) - 1:
-            self.current_wallpaper_index = 0
-        else:
-            self.current_wallpaper_index += 1
-
-        self.update_wallpaper()
+        if self.wallpapers.next():
+            self.update_wallpaper()
 
     def update_wallpaper(self):
-        wallpaper = self.get_current_wallpaper()
+        wallpaper = self.wallpapers.get_current()
 
         if wallpaper is None:
             return
 
-        self.tray_icon.setToolTip("{}\n\nCurrent wallpaper: {}".format(QtGui.QGuiApplication.applicationName(), wallpaper))
+        self.tray_icon.setToolTip("{}\n\nCurrent wallpaper: {}".format(QtGui.QGuiApplication.applicationName(), wallpaper.file_path))
 
-        subprocess.call(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(wallpaper).toString()])
+        subprocess.call(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(wallpaper.file_path).toString()])
 
         self.timer.start()
 
-    def reload_wallpapers(self):
-        self.wallpapers = []
+        self.update_pause_action()
 
+    def reload_wallpapers(self):
         path = self.folder_field.text()
 
         if not path:
             return
 
-        for current_path, folders, files in os.walk(path):
-            for file in files:
-                self.wallpapers.append(os.path.join(current_path, file))
-
-        random.shuffle(self.wallpapers)
+        self.wallpapers.clear()
+        self.wallpapers.add_from_path(path)
 
         self.next_wallpaper()
         self.timer.setInterval(self.interval_field.value() * 1000 * 60)
         self.timer.start()
+
+        self.update_pause_action()
 
     def save(self):
         settings = QtCore.QSettings("SelfCoders", "WallpaperChanger")
