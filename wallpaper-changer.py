@@ -6,6 +6,9 @@ import subprocess
 import sys
 from typing import Optional
 
+import dbus
+import dbus.mainloop.glib
+import dbus.service
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 
@@ -67,8 +70,27 @@ class WallpaperList(list):
         return self[self.current_index]
 
 
+class DBusHandler(dbus.service.Object):
+    def __init__(self, main_window: "MainWindow", session_bus: dbus.Bus):
+        dbus.service.Object.__init__(self, session_bus, "/")
+
+        self.main_window = main_window
+
+    @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+    def toggle_pause(self):
+        self.main_window.toggle_pause()
+
+    @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+    def previous_wallpaper(self):
+        self.main_window.previous_wallpaper()
+
+    @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+    def next_wallpaper(self):
+        self.main_window.next_wallpaper()
+
+
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self, dbus_session: dbus.SessionBus):
         super().__init__()
 
         self.wallpapers = WallpaperList()
@@ -137,6 +159,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.load_settings()
 
         self.update_pause_action()
+
+        DBusHandler(self, dbus_session)
 
     def handle_tray_icon_activation(self, reason):
         if reason == QtWidgets.QSystemTrayIcon.Trigger:
@@ -241,7 +265,11 @@ def main():
     app.setApplicationName("Wallpaper Changer")
     app.setWindowIcon(QtGui.QIcon.fromTheme("wallpaper"))
 
-    main_window = MainWindow()
+    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+    session_bus = dbus.SessionBus()
+    bus = dbus.service.BusName("com.selfcoders.WallpaperChanger", session_bus)
+
+    main_window = MainWindow(session_bus)
 
     sys.exit(app.exec_())
 
