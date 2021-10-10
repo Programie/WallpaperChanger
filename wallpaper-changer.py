@@ -234,7 +234,7 @@ class MainWindow(QtWidgets.QMainWindow):
         elif platform.system() == "Darwin":
             subprocess.call(["open", wallpaper.file_path])
         elif platform.system() == "Windows":
-            os.system(wallpaper.file_path)
+            os.startfile(wallpaper.file_path)
 
     def update_pause_action(self):
         if self.timer.isActive():
