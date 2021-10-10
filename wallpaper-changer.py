@@ -1,15 +1,21 @@
 #! /usr/bin/env python3
+import ctypes
 import imghdr
 import os
+import platform
 import random
 import subprocess
 import sys
 from typing import Optional
 
-import dbus
-import dbus.mainloop.glib
-import dbus.service
 from PyQt5 import QtWidgets, QtGui, QtCore
+
+if platform.system() == "Linux":
+    import dbus
+    import dbus.mainloop.glib
+    import dbus.service
+else:
+    dbus = None
 
 
 class Wallpaper:
@@ -35,12 +41,26 @@ class Wallpaper:
                 # TODO: Implement support for KDE
                 pass
 
+    def set_active_macos(self) -> None:
+        script = """
+            /usr/bin/osascript<<END
+            tell application "Finder"
+            set desktop picture to POSIX file "{}"
+            end tell
+            END
+        """
+
+        subprocess.Popen(script.format(self.file_path), shell=True)
+
+    def set_active_windows(self) -> None:
+        ctypes.windll.user32.SystemParametersInfoW(20, 0, self.file_path, 0)
+
     def set_active(self) -> None:
-        if sys.platform in ["win32", "cygwin"]:
-            # TODO: Implement support for Windows
+        if platform.system() == "Windows":
+            self.set_active_windows()
             pass
-        elif sys.platform == "darwin":
-            # TODO: Implement support for macOS
+        elif platform.system() == "Darwin":
+            self.set_active_macos()
             pass
         else:
             self.set_active_linux()
@@ -93,27 +113,28 @@ class WallpaperList(list):
         return self[self.current_index]
 
 
-class DBusHandler(dbus.service.Object):
-    def __init__(self, main_window: "MainWindow", session_bus: dbus.Bus):
-        dbus.service.Object.__init__(self, session_bus, "/")
+if dbus:
+    class DBusHandler(dbus.service.Object):
+        def __init__(self, main_window: "MainWindow", session_bus: dbus.Bus):
+            dbus.service.Object.__init__(self, session_bus, "/")
 
-        self.main_window = main_window
+            self.main_window = main_window
 
-    @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
-    def toggle_pause(self):
-        self.main_window.toggle_pause()
+        @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+        def toggle_pause(self):
+            self.main_window.toggle_pause()
 
-    @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
-    def previous_wallpaper(self):
-        self.main_window.previous_wallpaper()
+        @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+        def previous_wallpaper(self):
+            self.main_window.previous_wallpaper()
 
-    @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
-    def next_wallpaper(self):
-        self.main_window.next_wallpaper()
+        @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+        def next_wallpaper(self):
+            self.main_window.next_wallpaper()
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, dbus_session: dbus.SessionBus):
+    def __init__(self, dbus_session):
         super().__init__()
 
         self.wallpapers = WallpaperList()
@@ -167,9 +188,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tray_menu.addSeparator()
         tray_menu.addAction(QtGui.QIcon.fromTheme("image-viewer"), "Open current wallpaper", self.open_wallpaper)
         tray_menu.addSeparator()
-        tray_menu.addAction(QtGui.QIcon.fromTheme("media-skip-backward"), "Previous wallpaper", self.previous_wallpaper)
+        tray_menu.addAction(self.style().standardIcon(QtWidgets.QStyle.SP_MediaSkipBackward), "Previous wallpaper", self.previous_wallpaper)
         self.toggle_pause_action = tray_menu.addAction("", self.toggle_pause)
-        tray_menu.addAction(QtGui.QIcon.fromTheme("media-skip-forward"), "Next wallpaper", self.next_wallpaper)
+        tray_menu.addAction(self.style().standardIcon(QtWidgets.QStyle.SP_MediaSkipForward), "Next wallpaper", self.next_wallpaper)
         tray_menu.addSeparator()
         tray_menu.addAction("Quit", self.quit)
 
@@ -183,7 +204,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.update_pause_action()
 
-        DBusHandler(self, dbus_session)
+        if dbus_session:
+            DBusHandler(self, dbus_session)
 
     def handle_tray_icon_activation(self, reason):
         if reason == QtWidgets.QSystemTrayIcon.Trigger:
@@ -207,14 +229,19 @@ class MainWindow(QtWidgets.QMainWindow):
         if wallpaper is None:
             return
 
-        subprocess.call(["xdg-open", wallpaper.file_path])
+        if platform.system() == "Linux":
+            subprocess.call(["xdg-open", wallpaper.file_path])
+        elif platform.system() == "Darwin":
+            subprocess.call(["open", wallpaper.file_path])
+        elif platform.system() == "Windows":
+            os.system(wallpaper.file_path)
 
     def update_pause_action(self):
         if self.timer.isActive():
-            self.toggle_pause_action.setIcon(QtGui.QIcon.fromTheme("media-playback-pause"))
+            self.toggle_pause_action.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_MediaPause))
             self.toggle_pause_action.setText("Pause")
         else:
-            self.toggle_pause_action.setIcon(QtGui.QIcon.fromTheme("media-playback-start"))
+            self.toggle_pause_action.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_MediaPlay))
             self.toggle_pause_action.setText("Continue")
 
     def toggle_pause(self):
@@ -286,11 +313,14 @@ def main():
     app = QtWidgets.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName("Wallpaper Changer")
-    app.setWindowIcon(QtGui.QIcon.fromTheme("wallpaper"))
+    app.setWindowIcon(app.style().standardIcon(QtWidgets.QStyle.SP_ComputerIcon))
 
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-    session_bus = dbus.SessionBus()
-    bus = dbus.service.BusName("com.selfcoders.WallpaperChanger", session_bus)
+    if dbus:
+        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+        session_bus = dbus.SessionBus()
+        bus = dbus.service.BusName("com.selfcoders.WallpaperChanger", session_bus)
+    else:
+        session_bus = None
 
     main_window = MainWindow(session_bus)
 
