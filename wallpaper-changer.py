@@ -19,8 +19,31 @@ class Wallpaper:
     def is_valid(self) -> bool:
         return imghdr.what(self.file_path) is not None
 
+    def set_active_linux(self) -> None:
+        desktop_session = os.environ.get("DESKTOP_SESSION")
+
+        if desktop_session is not None:
+            desktop_session = desktop_session.lower()
+
+            if desktop_session in ["gnome", "gnome-wayland", "unity", "ubuntu", "pantheon", "budgie-desktop", "pop"]:
+                subprocess.call(["gsettings", "set", "org.gnome.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(self.file_path).toString()])
+            elif desktop_session in ["cinnamon"]:
+                subprocess.call(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(self.file_path).toString()])
+            elif desktop_session in ["mate"]:
+                subprocess.call(["gsettings", "set", "org.mate.background", "picture-filename", QtCore.QUrl.fromLocalFile(self.file_path).toString()])
+            elif desktop_session in ["plasma", "kde"]:
+                # TODO: Implement support for KDE
+                pass
+
     def set_active(self) -> None:
-        subprocess.call(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(self.file_path).toString()])
+        if sys.platform in ["win32", "cygwin"]:
+            # TODO: Implement support for Windows
+            pass
+        elif sys.platform == "darwin":
+            # TODO: Implement support for macOS
+            pass
+        else:
+            self.set_active_linux()
 
 
 class WallpaperList(list):
