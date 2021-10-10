@@ -16,6 +16,9 @@ class Wallpaper:
     def is_valid(self) -> bool:
         return imghdr.what(self.file_path) is not None
 
+    def set_active(self) -> None:
+        subprocess.call(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(self.file_path).toString()])
+
 
 class WallpaperList(list):
     def __init__(self):
@@ -191,7 +194,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tray_icon.setToolTip("{}\n\nCurrent wallpaper: {}".format(QtGui.QGuiApplication.applicationName(), wallpaper.file_path))
 
-        subprocess.call(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", QtCore.QUrl.fromLocalFile(wallpaper.file_path).toString()])
+        wallpaper.set_active()
 
         self.timer.start()
 
