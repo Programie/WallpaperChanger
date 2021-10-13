@@ -174,6 +174,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.interval_field = QtWidgets.QSpinBox()
         self.interval_field.setMinimum(1)
         self.interval_field.setMaximum(10000)
+        self.interval_field.setSuffix(" min")
         form_layout.addWidget(self.interval_field, 1, 1)
 
         button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
