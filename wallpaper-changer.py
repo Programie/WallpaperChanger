@@ -211,7 +211,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def handle_tray_icon_activation(self, reason):
         if reason == QtWidgets.QSystemTrayIcon.Trigger:
             if self.isVisible():
-                self.hide()
+                self.close()
             else:
                 self.show()
 
