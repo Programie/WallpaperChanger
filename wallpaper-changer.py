@@ -132,6 +132,14 @@ if dbus:
         def next_wallpaper(self):
             self.main_window.next_wallpaper()
 
+        @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="")
+        def open_wallpaper(self):
+            self.main_window.open_wallpaper()
+
+        @dbus.service.method("com.selfcoders.WallpaperChanger", in_signature="", out_signature="s")
+        def get_current_wallpaper(self):
+            return self.main_window.wallpapers.get_current().file_path
+
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, dbus_session):
